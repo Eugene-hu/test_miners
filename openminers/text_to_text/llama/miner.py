@@ -89,7 +89,7 @@ class LlamaMiner( openminers.BasePromptingMiner ):
                 + history[1]["content"],
             }
         ] + history[2:]
-        return processed_history
+        return history[0]['content']
 
     def forward( self, messages: List[Dict[str, str]]  ) -> str: 
         with torch.no_grad():
