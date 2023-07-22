@@ -31,6 +31,10 @@ from transformers import GenerationConfig
 deployment_framework = "ds_inference"
 deployment_framework = "accelerate"
 
+B_INST, E_INST = "[INST]", "[/INST]"
+B_SYS, E_SYS = "<<SYS>>\n", "\n<</SYS>>\n\n"
+DEFAULT_SYSTEM_PROMPT = "You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe. Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content. Please ensure that your responses are socially unbiased and positive in nature.\n \n If a question does not make any sense, or is not factually coherent, explain why instead of answering something not correct. If you don't know the answer to a question, please don't share false information."
+
 class LlamaMiner( openminers.BasePromptingMiner ):
 
     @classmethod
@@ -62,7 +66,7 @@ class LlamaMiner( openminers.BasePromptingMiner ):
             self.config.llama.model_name, 
             device_map="auto", 
             load_in_4bit=True,
-        )
+        ).eval()
         self.get_config= GenerationConfig.from_pretrained(self.config.llama.model_name)
         self.get_config.max_new_tokens =500
         self.get_config.length_penalty =1.5
@@ -71,23 +75,31 @@ class LlamaMiner( openminers.BasePromptingMiner ):
     @staticmethod
     def _process_history( history: List[ Dict[str, str] ] ) -> str:
         processed_history = ''
-        for message in history:
-            if message['role'] == 'system':
-                processed_history += 'system: ' + message['content'] + '\n'
-            if message['role'] == 'assistant':
-                processed_history += 'assistant: ' + message['content'] + '\n'
-            if message['role'] == 'user':
-                processed_history += 'user: ' + message['content'] + '\n'
+        if history[0]["role"] != "system":
+            history = [{"role": "system",
+                        "content": DEFAULT_SYSTEM_PROMPT,
+                        }] + history
+                
+        history = [
+            {
+                "role": history[1]["role"],
+                "content": B_SYS
+                + history[0]["content"]
+                + E_SYS
+                + history[1]["content"],
+            }
+        ] + history[2:]
         return processed_history
 
     def forward( self, messages: List[Dict[str, str]]  ) -> str: 
-        history = self._process_history(messages)
-        bittensor.logging.debug( "Message: " + str( history ) )
-        inputs = self.tokenizer(history, return_tensors="pt").to("cuda")
-        outputs = self.model.generate(**inputs,generation_config=self.get_config)
-        text = self.tokenizer.decode(outputs[0], skip_special_tokens=True).replace( str( history ), "")
-        # Logging input and generation if debugging is active
-        bittensor.logging.debug( "Generation: " + text )
+        with torch.no_grad():
+            history = self._process_history(messages)
+            bittensor.logging.debug( "Message: " + str( messages ) )
+            inputs = self.tokenizer(history, return_tensors="pt").to("cuda")
+            outputs = self.model.generate(**inputs,generation_config=self.get_config)
+            text = self.tokenizer.decode(outputs[0], skip_special_tokens=True).replace( str( history ), "")
+            # Logging input and generation if debugging is active
+            bittensor.logging.debug( "Generation: " + text )
         return text
 
 if __name__ == "__main__":  
