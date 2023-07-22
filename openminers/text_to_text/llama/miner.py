@@ -47,7 +47,7 @@ class LlamaMiner( openminers.BasePromptingMiner ):
 
     @classmethod
     def config( cls ) -> "bittensor.Config":
-        parser = argparse.ArgumentParser( description='Falcon Miner Config' )
+        parser = argparse.ArgumentParser( description='llama Config' )
         cls.add_args( parser )
         return bittensor.config( parser )
 
@@ -57,103 +57,11 @@ class LlamaMiner( openminers.BasePromptingMiner ):
         # loading the tokenizer
         self.tokenizer = AutoTokenizer.from_pretrained(self.config.llama.model_name)
 
-        if self.config.deployment_framework == "deepspeed":        
-
-            # distributed setup
-            os.environ["TOKENIZERS_PARALLELISM"] = "false" # To avoid warnings about parallelism in tokenizers
-            self.local_rank = int(os.getenv('LOCAL_RANK', '0'))
-            world_size = int(os.getenv('WORLD_SIZE', '1'))
-            torch.cuda.set_device(self.local_rank)
-            deepspeed.init_distributed()
-
-            self.tokenizer = AutoTokenizer.from_pretrained(self.config.llama.model_name)
-
-            config = AutoConfig.from_pretrained(self.config.llama.model_name, trust_remote_code=True)
-
-            model_hidden_size = config.hidden_size
-
-            # batch size has to be divisible by world_size, but can be bigger than world_size
-            train_batch_size = 1 * world_size
-
-            # ds_config notes
-            #
-            # - enable bf16 if you use Ampere or higher GPU - this will run in mixed precision and will be
-            # faster.
-            #
-            # - for older GPUs you can enable fp16, but it'll only work for non-bf16 pretrained models - e.g.
-            # all official t5 models are bf16-pretrained
-            #
-            # - set offload_param.device to "none" or completely remove the `offload_param` section if you don't
-            # - want CPU offload
-            #
-            # - if using `offload_param` you can manually finetune stage3_param_persistence_threshold to control
-            # - which params should remain on gpus - the larger the value the smaller the offload size
-            #
-            # For indepth info on Deepspeed config see
-            # https://huggingface.co/docs/transformers/master/main_classes/deepspeed
-            ds_config = {
-                "fp16": {
-                    "enabled": False,
-                },
-                "bf16": {
-                    "enabled": False,
-                },
-                "zero_optimization": {
-                    "stage": 3,
-                    "overlap_comm": True,
-                    "contiguous_gradients": True,
-                    "reduce_bucket_size": model_hidden_size * model_hidden_size,
-                    "stage3_prefetch_bucket_size": 0.9 * model_hidden_size * model_hidden_size,
-                    "stage3_param_persistence_threshold": 10 * model_hidden_size
-                },
-                "steps_per_print": 2000,
-                "train_batch_size": train_batch_size,
-                "train_micro_batch_size_per_gpu": 1,
-                "wall_clock_breakdown": False
-            }
-
-            # next line instructs transformers to partition the model directly over multiple gpus using
-            # deepspeed.zero.Init when model's `from_pretrained` method is called.
-            #
-            # **it has to be run before loading the model AutoModelForSeq2SeqLM.from_pretrained(model_name)**
-            #
-            # otherwise the model will first be loaded normally and only partitioned at forward time which is
-            # less efficient and when there is little CPU RAM may fail
-            dschf = HfDeepSpeedConfig(ds_config) # keep this object alive
-
-            # now a model can be loaded.
-            self.model = AutoModelForCausalLM.from_pretrained(self.config.llama.model_name, trust_remote_code=True)
-
-            # initialise deepspeed ZeRO
-            self.ds_engine = deepspeed.initialize(model=self.model,
-                                            config_params=ds_config,
-                                            model_parameters=None,
-                                            optimizer=None,
-                                            lr_scheduler=None)[0]
-            self.ds_engine.module.eval() 
-        
-        else:
-
-            if self.config.use_8_bit and self.config.use_4_bit:
-                raise ValueError(
-                    "You can't use 8 bit and 4 bit precision at the same time"
-                )
-
-            self.model = AutoModelForCausalLM.from_pretrained(
-                self.config.llama.model_name, 
-                device_map="auto", 
-                torch_dtype=torch.float16, 
-                load_in_8bit=self.config.use_8_bit, 
-                load_in_4bit=self.config.use_4_bit,
-            )
-
-            self.pipe = pipeline( 
-                "text-generation",
-                model=self.model,
-                tokenizer=self.tokenizer,
-                torch_dtype=torch.bfloat16,
-                device_map="auto",
-            )
+        self.model = AutoModelForCausalLM.from_pretrained(
+            self.config.llama.model_name, 
+            device_map="auto", 
+            load_in_4bit=True,
+        )
 
     @staticmethod
     def _process_history( history: List[ Dict[str, str] ] ) -> str:
@@ -169,26 +77,13 @@ class LlamaMiner( openminers.BasePromptingMiner ):
 
     def forward( self, messages: List[Dict[str, str]]  ) -> str: 
         history = self._process_history(messages)
-        if self.config.deployment_framework == "deepspeed":
-            t_generate_start = time.time()
-            inputs = self.tokenizer.encode(history, return_tensors="pt").to(device=self.local_rank)
-            with torch.no_grad():
-                outputs = self.ds_engine.module.generate(inputs, max_length= 60)
-            resp = self.tokenizer.decode(outputs[0], skip_special_tokens=True).replace( str( history ), "")
-        else:
-            resp = self.pipe( 
-                history, 
-                max_length=200,
-                do_sample=True,
-                top_k=10,
-                num_return_sequences=1,
-                eos_token_id=self.tokenizer.eos_token_id, 
-            )[0]['generated_text'].split(':')[-1].replace( str( history ), "")
-
+        inputs = self.tokenizer(history, return_tensors="pt").to("cuda")
+        outputs = self.model.generate(**inputs, max_new_tokens=150)
+        text = self.tokenizer.decode(outputs[0], skip_special_tokens=True).replace( str( history ), "")
         # Logging input and generation if debugging is active
         bittensor.logging.debug( "Message: " + str( messages ) )
-        bittensor.logging.debug( "Generation: " + str( resp ) )
-        return resp
+        bittensor.logging.debug( "Generation: " + text )
+        return text
 
 if __name__ == "__main__":  
     miner = LlamaMiner()
