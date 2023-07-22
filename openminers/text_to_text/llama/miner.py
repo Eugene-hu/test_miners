@@ -25,6 +25,7 @@ from transformers.deepspeed import HfDeepSpeedConfig
 import bittensor
 import deepspeed
 import os
+from transformers import GenerationConfig
 # from openbase.config import config
 
 deployment_framework = "ds_inference"
@@ -62,6 +63,10 @@ class LlamaMiner( openminers.BasePromptingMiner ):
             device_map="auto", 
             load_in_4bit=True,
         )
+        self.get_config= GenerationConfig.from_pretrained("self.config.llama.model_name")
+        self.get_config.max_new_tokens =500
+        self.get_config.length_penalty =1.5
+        self.get_config.max_time = 8
 
     @staticmethod
     def _process_history( history: List[ Dict[str, str] ] ) -> str:
@@ -79,7 +84,7 @@ class LlamaMiner( openminers.BasePromptingMiner ):
         history = self._process_history(messages)
         bittensor.logging.debug( "Message: " + str( history ) )
         inputs = self.tokenizer(history, return_tensors="pt").to("cuda")
-        outputs = self.model.generate(**inputs,early_stopping=True, max_new_tokens=150, temperature=1)
+        outputs = self.model.generate(**inputs,generation_config=self.get_config)
         text = self.tokenizer.decode(outputs[0], skip_special_tokens=True).replace( str( history ), "")
         # Logging input and generation if debugging is active
         bittensor.logging.debug( "Generation: " + text )
