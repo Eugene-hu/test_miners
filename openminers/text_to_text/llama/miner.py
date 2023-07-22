@@ -78,7 +78,7 @@ class LlamaMiner( openminers.BasePromptingMiner ):
     def forward( self, messages: List[Dict[str, str]]  ) -> str: 
         history = self._process_history(messages)
         inputs = self.tokenizer(history, return_tensors="pt").to("cuda")
-        outputs = self.model.generate(**inputs, max_new_tokens=150)
+        outputs = self.model.generate(**inputs, max_new_tokens=150, temperature=1)
         text = self.tokenizer.decode(outputs[0], skip_special_tokens=True).replace( str( history ), "")
         # Logging input and generation if debugging is active
         bittensor.logging.debug( "Message: " + str( messages ) )
@@ -90,4 +90,4 @@ if __name__ == "__main__":
     with miner:
         while True:
             print ('running...', time.time() )
-            time.sleep( 1 )
+            time.sleep( 12)
