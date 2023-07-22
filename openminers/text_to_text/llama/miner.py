@@ -71,10 +71,10 @@ class LlamaMiner( openminers.BasePromptingMiner ):
         self.get_config.max_new_tokens =500
         self.get_config.length_penalty =1.5
         self.get_config.max_time = 8
+        self.get_config.early_stopping = True
 
     @staticmethod
     def _process_history( history: List[ Dict[str, str] ] ) -> str:
-        processed_history = ''
         if history[0]["role"] != "system":
             history = [{"role": "system",
                         "content": DEFAULT_SYSTEM_PROMPT,
@@ -86,7 +86,10 @@ class LlamaMiner( openminers.BasePromptingMiner ):
                 "content": B_SYS
                 + history[0]["content"]
                 + E_SYS
-                + history[1]["content"],
+                + E_SYS
+                + B_INST
+                + history[1]["content"]
+                + E_INST
             }
         ] + history[2:]
         return history[0]['content']
@@ -94,7 +97,7 @@ class LlamaMiner( openminers.BasePromptingMiner ):
     def forward( self, messages: List[Dict[str, str]]  ) -> str: 
         with torch.no_grad():
             history = self._process_history(messages)
-            bittensor.logging.debug( "Message: " + str( messages ) )
+            bittensor.logging.debug( "Message: " + str( history ) )
             inputs = self.tokenizer(history, return_tensors="pt").to("cuda")
             outputs = self.model.generate(**inputs,generation_config=self.get_config)
             text = self.tokenizer.decode(outputs[0], skip_special_tokens=True).replace( str( history ), "")
