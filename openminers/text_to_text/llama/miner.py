@@ -60,7 +60,7 @@ class LlamaMiner( openminers.BasePromptingMiner ):
         self.model = AutoModelForCausalLM.from_pretrained(
             self.config.llama.model_name, 
             device_map="auto", 
-            load_in_4bit=True,
+            load_in_8bit=True,
         )
 
     @staticmethod
@@ -77,11 +77,11 @@ class LlamaMiner( openminers.BasePromptingMiner ):
 
     def forward( self, messages: List[Dict[str, str]]  ) -> str: 
         history = self._process_history(messages)
+        bittensor.logging.debug( "Message: " + str( history ) )
         inputs = self.tokenizer(history, return_tensors="pt").to("cuda")
-        outputs = self.model.generate(**inputs, max_new_tokens=150, temperature=1)
+        outputs = self.model.generate(**inputs,early_stopping=True, max_new_tokens=150, temperature=1)
         text = self.tokenizer.decode(outputs[0], skip_special_tokens=True).replace( str( history ), "")
         # Logging input and generation if debugging is active
-        bittensor.logging.debug( "Message: " + str( messages ) )
         bittensor.logging.debug( "Generation: " + text )
         return text
 
