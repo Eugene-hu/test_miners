@@ -33,7 +33,7 @@ deployment_framework = "accelerate"
 
 B_INST, E_INST = "[INST]", "[/INST]"
 B_SYS, E_SYS = "<<SYS>>\n", "\n<</SYS>>\n\n"
-DEFAULT_SYSTEM_PROMPT = "You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being safe. Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content. Please ensure that your responses are socially unbiased and positive in nature.\n \n If a question does not make any sense, or is not factually coherent, explain why instead of answering something not correct. If you don't know the answer to a question, please don't share false information."
+DEFAULT_SYSTEM_PROMPT = "You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being short and quick to the point. Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content. Please ensure that your responses are socially unbiased and positive in nature.\n \n If a question does not make any sense, or is not factually coherent, explain why instead of answering something not correct. If you don't know the answer to a question, please don't share false information."
 
 class LlamaMiner( openminers.BasePromptingMiner ):
 
@@ -68,10 +68,9 @@ class LlamaMiner( openminers.BasePromptingMiner ):
             load_in_4bit=True,
         ).eval()
         self.get_config= GenerationConfig.from_pretrained(self.config.llama.model_name)
-        self.get_config.max_new_tokens =500
-        self.get_config.length_penalty =1.5
+        self.get_config.max_new_tokens =600
+        self.get_config.length_penalty =1.6
         self.get_config.max_time = 8
-        self.get_config.early_stopping = True
 
     @staticmethod
     def _process_history( history: List[ Dict[str, str] ] ) -> str:
