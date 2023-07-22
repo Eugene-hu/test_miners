@@ -60,7 +60,7 @@ class LlamaMiner( openminers.BasePromptingMiner ):
         self.model = AutoModelForCausalLM.from_pretrained(
             self.config.llama.model_name, 
             device_map="auto", 
-            load_in_8bit=True,
+            load_in_4bit=True,
         )
 
     @staticmethod
