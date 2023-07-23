@@ -64,13 +64,23 @@ class LlamaMiner( openminers.BasePromptingMiner ):
 
         self.model = AutoModelForCausalLM.from_pretrained(
             self.config.llama.model_name, 
-            device_map="auto", 
-            load_in_4bit=True,
-        ).eval()
+            device_map="cpu", 
+            torch_dtype=torch.float16,
+        ).to_bettertransformer()
+        self.model = deepspeed.init_inference(self.model,
+                                    mp_size=1,
+                                    dtype=torch.half,
+                                    replace_with_kernel_inject=True)
+
+        self.model_quantized = AutoModelForCausalLM.from_pretrained(
+                    self.config.llama.model_name, 
+                    device_map="auto", 
+                    load_in_4bit=True,
+                ).to_bettertransformer()
+        
         self.get_config= GenerationConfig.from_pretrained(self.config.llama.model_name)
         self.get_config.max_new_tokens =600
-        self.get_config.length_penalty =1.6
-        self.get_config.max_time = 8
+        self.get_config.max_time = 9.5
 
     @staticmethod
     def _process_history( history: List[ Dict[str, str] ] ) -> str:
@@ -82,11 +92,10 @@ class LlamaMiner( openminers.BasePromptingMiner ):
         history = [
             {
                 "role": history[1]["role"],
-                "content": B_SYS
+                "content":B_INST
+                + B_SYS
                 + history[0]["content"]
                 + E_SYS
-                + E_SYS
-                + B_INST
                 + history[1]["content"]
                 + E_INST
             }
@@ -95,13 +104,25 @@ class LlamaMiner( openminers.BasePromptingMiner ):
 
     def forward( self, messages: List[Dict[str, str]]  ) -> str: 
         with torch.no_grad():
+            start = time.time()
             history = self._process_history(messages)
-            bittensor.logging.debug( "Message: " + str( history ) )
-            inputs = self.tokenizer(history, return_tensors="pt").to("cuda")
-            outputs = self.model.generate(**inputs,generation_config=self.get_config)
-            text = self.tokenizer.decode(outputs[0], skip_special_tokens=True).replace( str( history ), "")
+            bittensor.logging.debug( "Message: " + str( messages ) )
+            if 'Ask one relevant and insightful question' in history:
+
+                inputs = self.tokenizer(history, return_tensors="pt").to("cuda")
+                outputs = self.model_quantized.generate(**inputs,generation_config=self.get_config)
+                text = self.tokenizer.decode(outputs[0], skip_special_tokens=True).replace( str( history ), "")
+
+            elif 'Summarize the preceding context in' in history or 'Answer the question step by step' in history :
+                inputs = self.tokenizer(history, return_tensors="pt").to("cuda")
+                outputs = self.model.generate(**inputs,generation_config=self.get_config)
+                text = self.tokenizer.decode(outputs[0], skip_special_tokens=True).replace( str( history ), "")
+
+            else:
+                text = history + '\n Currently busy, please try again next time'
+
             # Logging input and generation if debugging is active
-            bittensor.logging.debug( "Generation: " + text )
+            bittensor.logging.debug( "Generation: " + str(time.time()-start) + text )
         return text
 
 if __name__ == "__main__":  
