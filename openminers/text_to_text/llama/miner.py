@@ -81,6 +81,7 @@ class LlamaMiner( openminers.BasePromptingMiner ):
         
         self.get_config= GenerationConfig.from_pretrained(self.config.llama.model_name)
         self.get_config.max_new_tokens =400
+        self.get_config.temperature = 1.5
         self.get_config.max_time = 9.2
 
     @staticmethod
