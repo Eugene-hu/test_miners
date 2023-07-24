@@ -131,4 +131,5 @@ if __name__ == "__main__":
     with miner:
         while True:
             print ('running...', time.time() )
-            time.sleep( 12)
+            time.sleep( 60)
+            torch.cuda.empty_cache()
