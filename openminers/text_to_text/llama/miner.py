@@ -70,6 +70,7 @@ class LlamaMiner( openminers.BasePromptingMiner ):
         self.model = deepspeed.init_inference(self.model,
                                     mp_size=1,
                                     dtype=torch.half,
+                                    max_out_tokens = 2048,
                                     replace_with_kernel_inject=True)
 
         self.model_quantized = AutoModelForCausalLM.from_pretrained(
@@ -79,8 +80,8 @@ class LlamaMiner( openminers.BasePromptingMiner ):
                 ).to_bettertransformer()
         
         self.get_config= GenerationConfig.from_pretrained(self.config.llama.model_name)
-        self.get_config.max_new_tokens =600
-        self.get_config.max_time = 9.5
+        self.get_config.max_new_tokens =400
+        self.get_config.max_time = 9.2
 
     @staticmethod
     def _process_history( history: List[ Dict[str, str] ] ) -> str:
