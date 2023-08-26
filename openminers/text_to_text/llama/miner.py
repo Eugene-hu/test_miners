@@ -107,7 +107,7 @@ class LlamaMiner( openminers.BasePromptingMiner ):
         ] + history[2:]
         return history[0]['content']
 
-    def reprocess_message(message,name):
+    def reprocess_message(self, message,name):
         if name =='summarize':
             return message
         elif name == 'answer':
@@ -131,7 +131,7 @@ class LlamaMiner( openminers.BasePromptingMiner ):
                 inputs = self.tokenizer(history, return_tensors="pt").to("cuda")
                 outputs = self.model.generate(**inputs,generation_config=self.get_config)
                 text = self.tokenizer.decode(outputs[0], skip_special_tokens=True).replace( str( history ), "")
-                
+
             elif 'Answer the question ' in history :
                 history = self.reprocess_message(history, 'answer')
                 inputs = self.tokenizer(history, return_tensors="pt").to("cuda")
