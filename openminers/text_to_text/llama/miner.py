@@ -34,6 +34,9 @@ deployment_framework = "accelerate"
 B_INST, E_INST = "[INST]", "[/INST]"
 B_SYS, E_SYS = "<<SYS>>\n", "\n<</SYS>>\n\n"
 DEFAULT_SYSTEM_PROMPT = "You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being short and quick to the point."
+question_prompt = 'Ask a single relevant and insightful question about the preceding context and previous questions. Do not try to return an answer or a summary:'
+answer_prompt = 'Answer the question step by step and explain your thoughts'
+
 
 class LlamaMiner( openminers.BasePromptingMiner ):
 
@@ -104,18 +107,33 @@ class LlamaMiner( openminers.BasePromptingMiner ):
         ] + history[2:]
         return history[0]['content']
 
+    def reprocess_message(message,name):
+        if name =='summarize':
+            return message
+        elif name == 'answer':
+            return message.split('Previous Question')[0] + message.split('Question:')[-1] + answer_prompt
+        else:
+            return message.split('Previous Question')[0] + question_prompt
+
     def forward( self, messages: List[Dict[str, str]]  ) -> str: 
         with torch.no_grad():
             start = time.time()
             history = self._process_history(messages)
             bittensor.logging.debug( "Message: " + str( messages ) )
-            if 'Ask one relevant and insightful question' in history:
-
+            if 'Ask one relevant and insightful question' in history or 'Ask a single relevant and insightful question' in history:
+                history = self.reprocess_message(history, 'question')
                 inputs = self.tokenizer(history, return_tensors="pt").to("cuda")
                 outputs = self.model_quantized.generate(**inputs,generation_config=self.get_config)
                 text = self.tokenizer.decode(outputs[0], skip_special_tokens=True).replace( str( history ), "")
 
-            elif 'Summarize the preceding context in' in history or 'Answer the question step by step' in history :
+            elif 'Summarize the preceding context' in history :
+                history = self.reprocess_message(history, 'summarize')
+                inputs = self.tokenizer(history, return_tensors="pt").to("cuda")
+                outputs = self.model.generate(**inputs,generation_config=self.get_config)
+                text = self.tokenizer.decode(outputs[0], skip_special_tokens=True).replace( str( history ), "")
+                
+            elif 'Answer the question ' in history :
+                history = self.reprocess_message(history, 'answer')
                 inputs = self.tokenizer(history, return_tensors="pt").to("cuda")
                 outputs = self.model.generate(**inputs,generation_config=self.get_config)
                 text = self.tokenizer.decode(outputs[0], skip_special_tokens=True).replace( str( history ), "")
