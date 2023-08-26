@@ -26,6 +26,7 @@ import bittensor
 import deepspeed
 import os
 from transformers import GenerationConfig
+from threading import Lock
 # from openbase.config import config
 
 deployment_framework = "ds_inference"
@@ -81,7 +82,7 @@ class LlamaMiner( openminers.BasePromptingMiner ):
                     device_map="auto", 
                     load_in_4bit=True,
                 ).to_bettertransformer()
-        
+        self.mutex = Lock()
         self.get_config= GenerationConfig.from_pretrained(self.config.llama.model_name)
         self.get_config.max_new_tokens =300
         self.get_config.temperature = 1.5
@@ -131,15 +132,17 @@ class LlamaMiner( openminers.BasePromptingMiner ):
                 history = self.reprocess_message(history, 'summarize')
                 bittensor.logging.debug( "Message: " + str( history ) )
                 inputs = self.tokenizer(history, return_tensors="pt").to("cuda")
-                outputs = self.model.generate(**inputs,generation_config=self.get_config)
-                text = self.tokenizer.decode(outputs[0], skip_special_tokens=True).replace( str( history ), "")
+                with self.mutex:
+                    outputs = self.model.generate(**inputs,generation_config=self.get_config)
+                    text = self.tokenizer.decode(outputs[0], skip_special_tokens=True).replace( str( history ), "")
 
             elif 'Answer the question ' in history :
                 history = self.reprocess_message(history, 'answer')
                 bittensor.logging.debug( "Message: " + str( history ) )
                 inputs = self.tokenizer(history, return_tensors="pt").to("cuda")
-                outputs = self.model.generate(**inputs,generation_config=self.get_config)
-                text = self.tokenizer.decode(outputs[0], skip_special_tokens=True).replace( str( history ), "")
+                with self.mutex:
+                    outputs = self.model.generate(**inputs,generation_config=self.get_config)
+                    text = self.tokenizer.decode(outputs[0], skip_special_tokens=True).replace( str( history ), "")
 
             else:
                 text = messages[0]['content'] + '\n Currently busy, please try again next time'
