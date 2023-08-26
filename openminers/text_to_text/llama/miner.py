@@ -111,9 +111,9 @@ class LlamaMiner( openminers.BasePromptingMiner ):
         if name =='summarize':
             return message
         elif name == 'answer':
-            return message.split('Previous Question')[0] + message.split('Question:')[-1] + answer_prompt
+            return message.split('Previous Question')[0] + message.split('Question:')[-1] 
         else:
-            return message.split('Previous Question')[0] + question_prompt
+            return message.split('Previous Question')[0] + question_prompt + E_INST
 
     def forward( self, messages: List[Dict[str, str]]  ) -> str: 
         with torch.no_grad():
