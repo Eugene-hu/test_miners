@@ -119,21 +119,24 @@ class LlamaMiner( openminers.BasePromptingMiner ):
         with torch.no_grad():
             start = time.time()
             history = self._process_history(messages)
-            bittensor.logging.debug( "Message: " + str( messages ) )
+            
             if 'Ask one relevant and insightful question' in history or 'Ask a single relevant and insightful question' in history:
                 history = self.reprocess_message(history, 'question')
+                bittensor.logging.debug( "Message: " + str( history ) )
                 inputs = self.tokenizer(history, return_tensors="pt").to("cuda")
                 outputs = self.model_quantized.generate(**inputs,generation_config=self.get_config)
                 text = self.tokenizer.decode(outputs[0], skip_special_tokens=True).replace( str( history ), "")
 
             elif 'Summarize the preceding context' in history :
                 history = self.reprocess_message(history, 'summarize')
+                bittensor.logging.debug( "Message: " + str( history ) )
                 inputs = self.tokenizer(history, return_tensors="pt").to("cuda")
                 outputs = self.model.generate(**inputs,generation_config=self.get_config)
                 text = self.tokenizer.decode(outputs[0], skip_special_tokens=True).replace( str( history ), "")
 
             elif 'Answer the question ' in history :
                 history = self.reprocess_message(history, 'answer')
+                bittensor.logging.debug( "Message: " + str( history ) )
                 inputs = self.tokenizer(history, return_tensors="pt").to("cuda")
                 outputs = self.model.generate(**inputs,generation_config=self.get_config)
                 text = self.tokenizer.decode(outputs[0], skip_special_tokens=True).replace( str( history ), "")
