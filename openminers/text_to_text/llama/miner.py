@@ -68,7 +68,7 @@ class LlamaMiner( openminers.BasePromptingMiner ):
 
         self.model = AutoModelForCausalLM.from_pretrained(
             self.config.llama.model_name, 
-            device_map="cpu", 
+            device="cpu", 
             torch_dtype=torch.float16,
         ).to_bettertransformer()
         self.model = deepspeed.init_inference(self.model,
