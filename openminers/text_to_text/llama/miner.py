@@ -93,7 +93,7 @@ class LlamaMiner( Miner ):
         self.get_config.max_time = 8.5
 
     @staticmethod
-    def _process_history( role, message: str ) -> str:
+    def _process_history( role: List[str], message: List[str] ) -> str:
 
         history = [{"role": "system",
                     "content": DEFAULT_SYSTEM_PROMPT,
@@ -101,12 +101,12 @@ class LlamaMiner( Miner ):
                 
         history = [
             {
-                "role": role,
+                "role": role[0],
                 "content":B_INST
                 + B_SYS
                 + history[0]["content"]
                 + E_SYS
-                + message
+                + message[0]
                 + E_INST
             }
         ] 
