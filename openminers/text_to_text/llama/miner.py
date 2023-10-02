@@ -29,6 +29,10 @@ from transformers import GenerationConfig
 from threading import Lock
 # from openbase.config import config
 
+from prompting.baseminer.miner import Miner
+from prompting.protocol import Prompting
+
+
 deployment_framework = "ds_inference"
 deployment_framework = "accelerate"
 
@@ -39,7 +43,7 @@ question_prompt = 'Ask a single relevant and insightful question about the prece
 answer_prompt = 'Answer the question step by step and explain your thoughts'
 
 
-class LlamaMiner( openminers.BasePromptingMiner ):
+class LlamaMiner( Miner ):
 
     @classmethod
     def add_args( cls, parser: argparse.ArgumentParser ):
@@ -89,23 +93,23 @@ class LlamaMiner( openminers.BasePromptingMiner ):
         self.get_config.max_time = 8.5
 
     @staticmethod
-    def _process_history( history: List[ Dict[str, str] ] ) -> str:
-        if history[0]["role"] != "system":
-            history = [{"role": "system",
-                        "content": DEFAULT_SYSTEM_PROMPT,
-                        }] + history
+    def _process_history( role, message: str ) -> str:
+
+        history = [{"role": "system",
+                    "content": DEFAULT_SYSTEM_PROMPT,
+                    }] 
                 
         history = [
             {
-                "role": history[1]["role"],
+                "role": role,
                 "content":B_INST
                 + B_SYS
                 + history[0]["content"]
                 + E_SYS
-                + history[1]["content"]
+                + message
                 + E_INST
             }
-        ] + history[2:]
+        ] 
         return history[0]['content']
 
     def reprocess_message(self, message,name):
@@ -116,10 +120,11 @@ class LlamaMiner( openminers.BasePromptingMiner ):
         else:
             return message.split('Previous Question')[0] + question_prompt + E_INST
 
-    def forward( self, messages: List[Dict[str, str]]  ) -> str: 
+    def prompt( self, synapse: Prompting  ) -> str: 
+        role, messages = synapse.roles, synapse.messages
         with torch.no_grad():
             start = time.time()
-            history = self._process_history(messages)
+            history = self._process_history(role, messages)
             
             if 'Ask one relevant and insightful question' in history or 'Ask a single relevant and insightful question' in history:
                 history = self.reprocess_message(history, 'question')
@@ -149,7 +154,8 @@ class LlamaMiner( openminers.BasePromptingMiner ):
 
             # Logging input and generation if debugging is active
             bittensor.logging.debug( "Generation: " + str(time.time()-start) + text )
-        return text
+            synapse.completion = text
+        return synapse
 
 if __name__ == "__main__":  
     miner = LlamaMiner()
