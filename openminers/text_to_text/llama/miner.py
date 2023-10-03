@@ -27,6 +27,8 @@ import deepspeed
 import os
 from transformers import GenerationConfig
 # from openbase.config import config
+from prompting.baseminer.miner import Miner
+from prompting.protocol import Prompting
 
 deployment_framework = "ds_inference"
 deployment_framework = "accelerate"
@@ -35,7 +37,7 @@ B_INST, E_INST = "[INST]", "[/INST]"
 B_SYS, E_SYS = "<<SYS>>\n", "\n<</SYS>>\n\n"
 DEFAULT_SYSTEM_PROMPT = "You are a helpful, respectful and honest assistant. Always answer as helpfully as possible, while being short and quick to the point. Your answers should not include any harmful, unethical, racist, sexist, toxic, dangerous, or illegal content. Please ensure that your responses are socially unbiased and positive in nature.\n \n If a question does not make any sense, or is not factually coherent, explain why instead of answering something not correct. If you don't know the answer to a question, please don't share false information."
 
-class LlamaMiner( openminers.BasePromptingMiner ):
+class LlamaMiner( Miner  ):
 
     @classmethod
     def add_args( cls, parser: argparse.ArgumentParser ):
@@ -73,36 +75,37 @@ class LlamaMiner( openminers.BasePromptingMiner ):
         self.get_config.max_time = 8
 
     @staticmethod
-    def _process_history( history: List[ Dict[str, str] ] ) -> str:
-        if history[0]["role"] != "system":
-            history = [{"role": "system",
-                        "content": DEFAULT_SYSTEM_PROMPT,
-                        }] + history
+    def _process_history(  role, message: str ) -> str:
+        history = [{"role": "system",
+                    "content": DEFAULT_SYSTEM_PROMPT,
+                    }] 
                 
         history = [
             {
-                "role": history[1]["role"],
+                "role": role,
                 "content": B_SYS
                 + history[0]["content"]
                 + E_SYS
                 + E_SYS
                 + B_INST
-                + history[1]["content"]
+                + message
                 + E_INST
             }
-        ] + history[2:]
+        ] 
         return history[0]['content']
 
-    def forward( self, messages: List[Dict[str, str]]  ) -> str: 
+    def prompt( self, synapse: Prompting  ) -> str: 
+        role, messages = synapse.roles, synapse.messages
         with torch.no_grad():
-            history = self._process_history(messages)
+            history = self._process_history(role, messages)
             bittensor.logging.debug( "Message: " + str( history ) )
             inputs = self.tokenizer(history, return_tensors="pt").to("cuda")
             outputs = self.model.generate(**inputs,generation_config=self.get_config)
             text = self.tokenizer.decode(outputs[0], skip_special_tokens=True).replace( str( history ), "")
             # Logging input and generation if debugging is active
             bittensor.logging.debug( "Generation: " + text )
-        return text
+            synapse.completion = text
+        return synapse
 
 if __name__ == "__main__":  
     miner = LlamaMiner()
