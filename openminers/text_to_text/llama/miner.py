@@ -82,13 +82,13 @@ class LlamaMiner( Miner  ):
                 
         history = [
             {
-                "role": role,
+                "role": role[0],
                 "content": B_SYS
                 + history[0]["content"]
                 + E_SYS
                 + E_SYS
                 + B_INST
-                + message
+                + message[0]
                 + E_INST
             }
         ] 
