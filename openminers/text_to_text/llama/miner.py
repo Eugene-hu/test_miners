@@ -96,12 +96,17 @@ class LlamaMiner( Miner ):
 
     def _process_history(self, role: List[str], message: List[str] ) -> str:
 
-        history = [{"role": "system",
-                    "content": DEFAULT_SYSTEM_PROMPT
-                    },
-                   {"role": role[0],
-                    "content": message[0]}] 
+        history = [
+            {
+                "role": 'user',
+                "content":
+                + B_SYS
+                + history[0]["content"]
+                + E_SYS
+                + message[0]
                 
+            }
+        ] 
         return self.tokenizer.apply_chat_template(history, return_tensors="pt")
 
     def reprocess_message(self, message,name):
