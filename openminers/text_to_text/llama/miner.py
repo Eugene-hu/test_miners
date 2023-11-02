@@ -78,7 +78,7 @@ class LlamaMiner( Miner ):
         self.model = deepspeed.init_inference(self.model,
                                     mp_size=1,
                                     dtype=torch.half,
-                                    max_out_tokens = 2048,
+                                    max_out_tokens = 1024,
                                     replace_with_kernel_inject=True)
 
         self.model_quantized = AutoModelForCausalLM.from_pretrained(
@@ -88,29 +88,19 @@ class LlamaMiner( Miner ):
                 ).to_bettertransformer()
         self.mutex = Lock()
         self.get_config= GenerationConfig.from_pretrained(self.config.llama.model_name)
-        self.get_config.max_new_tokens =300
+        self.get_config.max_new_tokens =200
         self.get_config.temperature = 1.5
         self.get_config.max_time = 8.5
 
-    @staticmethod
-    def _process_history( role: List[str], message: List[str] ) -> str:
+    def _process_history(self, role: List[str], message: List[str] ) -> str:
 
         history = [{"role": "system",
-                    "content": DEFAULT_SYSTEM_PROMPT,
-                    }] 
+                    "content": DEFAULT_SYSTEM_PROMPT
+                    },
+                   {"role": role[0],
+                    "content": message[0]}] 
                 
-        history = [
-            {
-                "role": role[0],
-                "content":B_INST
-                + B_SYS
-                + history[0]["content"]
-                + E_SYS
-                + message[0]
-                + E_INST
-            }
-        ] 
-        return history[0]['content']
+        return self.tokenizer.apply_chat_template(history, return_tensors="pt")
 
     def reprocess_message(self, message,name):
         if name =='summarize':
@@ -126,15 +116,9 @@ class LlamaMiner( Miner ):
             start = time.time()
             history = self._process_history(role, messages)
             
-            if 'Ask one relevant and insightful question' in history or 'Ask a single relevant and insightful question' in history:
-                history = self.reprocess_message(history, 'question')
-                bittensor.logging.debug( "Message: " + str( history ) )
-                inputs = self.tokenizer(history, return_tensors="pt").to("cuda")
-                outputs = self.model_quantized.generate(**inputs,generation_config=self.get_config)
-                text = self.tokenizer.decode(outputs[0], skip_special_tokens=True).replace( str( history ), "")
 
-            elif 'Summarize the preceding context' in history :
-                history = self.reprocess_message(history, 'summarize')
+            if 'Summarize the preceding context' in history :
+                #history = self.reprocess_message(history, 'summarize')
                 bittensor.logging.debug( "Message: " + str( history ) )
                 inputs = self.tokenizer(history, return_tensors="pt").to("cuda")
                 with self.mutex:
@@ -142,7 +126,7 @@ class LlamaMiner( Miner ):
                     text = self.tokenizer.decode(outputs[0], skip_special_tokens=True).replace( str( history ), "")
 
             elif 'Answer the question ' in history :
-                history = self.reprocess_message(history, 'answer')
+                #history = self.reprocess_message(history, 'answer')
                 bittensor.logging.debug( "Message: " + str( history ) )
                 inputs = self.tokenizer(history, return_tensors="pt").to("cuda")
                 with self.mutex:
@@ -150,7 +134,12 @@ class LlamaMiner( Miner ):
                     text = self.tokenizer.decode(outputs[0], skip_special_tokens=True).replace( str( history ), "")
 
             else:
-                text = messages[0]['content'] + '\n Currently busy, please try again next time'
+                #history = self.reprocess_message(history, 'question')
+                bittensor.logging.debug( "Message: " + str( history ) )
+                inputs = self.tokenizer(history, return_tensors="pt").to("cuda")
+                outputs = self.model_quantized.generate(**inputs,generation_config=self.get_config)
+                text = self.tokenizer.decode(outputs[0], skip_special_tokens=True).replace( str( history ), "")
+
 
             # Logging input and generation if debugging is active
             bittensor.logging.debug( "Generation: " + str(time.time()-start) + text )
