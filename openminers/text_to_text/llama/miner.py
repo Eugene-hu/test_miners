@@ -51,6 +51,8 @@ class LlamaMiner( Miner ):
         parser.add_argument( '--use_8_bit', action='store_true', default=False, help='Whether to use int8 quantization or not.' )
         parser.add_argument( '--use_4_bit',  action='store_true', default=False, help='Whether to use int4 quantization or not' )
         parser.add_argument('--llama.model_name',  type=str, default="huggyllama/llama-65b", help='Name/path of model to load')
+        parser.add_argument('--llama.model_name_2',  type=str, default="huggyllama/llama-65b", help='Name/path of model to load')
+
         parser.add_argument('--llama.max_tokens', type=int, default=20, help="The maximum number of tokens to generate in the completion.")
         parser.add_argument('--llama.do_sample', type=bool, default=True, help='Description of do_sample')
         parser.add_argument('--llama.temperature', type=float, default=1.0, help='Description of temperature')
@@ -74,7 +76,7 @@ class LlamaMiner( Miner ):
             self.config.llama.model_name, 
             device_map="cpu", 
             torch_dtype=torch.float16,
-        ).to_bettertransformer()
+        )
         self.model = deepspeed.init_inference(self.model,
                                     mp_size=1,
                                     dtype=torch.half,
@@ -82,7 +84,7 @@ class LlamaMiner( Miner ):
                                     replace_with_kernel_inject=True)
 
         self.model_quantized = AutoModelForCausalLM.from_pretrained(
-                    self.config.llama.model_name, 
+                    self.config.llama.model_name_2, 
                     device_map="auto", 
                     load_in_4bit=True,
                 ).to_bettertransformer()
