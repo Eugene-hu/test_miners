@@ -101,7 +101,7 @@ class LlamaMiner( Miner ):
                 "role": 'user',
                 "content":
                 B_SYS
-                + history[0]["content"]
+                + DEFAULT_SYSTEM_PROMPT
                 + E_SYS
                 + message[0]
                 
