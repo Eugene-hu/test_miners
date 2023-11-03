@@ -98,16 +98,16 @@ class LlamaMiner( Miner ):
 
         history = [
             {
-                "role": 'user',
-                "content":
-                B_SYS
+                "role": role[0],
+                "content":B_INST
+                + B_SYS
                 + DEFAULT_SYSTEM_PROMPT
                 + E_SYS
                 + message[0]
-                
+                + E_INST
             }
         ] 
-        return self.tokenizer.apply_chat_template(history, return_tensors="pt")
+        return history[0]['content']
 
     def reprocess_message(self, message,name):
         if name =='summarize':
