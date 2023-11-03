@@ -83,16 +83,11 @@ class LlamaMiner( Miner ):
                                     max_out_tokens = 1024,
                                     replace_with_kernel_inject=True)
 
-        self.model_quantized = AutoModelForCausalLM.from_pretrained(
-                    self.config.llama.model_name_2, 
-                    device_map="auto", 
-                    load_in_4bit=True,
-                ).to_bettertransformer()
         self.mutex = Lock()
         self.get_config= GenerationConfig.from_pretrained(self.config.llama.model_name)
         self.get_config.max_new_tokens =200
         self.get_config.temperature = 1.5
-        self.get_config.max_time = 8.5
+        self.get_config.max_time = 7.5
 
     def _process_history(self, role: List[str], message: List[str] ) -> str:
 
@@ -144,8 +139,9 @@ class LlamaMiner( Miner ):
                 #history = self.reprocess_message(history, 'question')
                 bittensor.logging.debug( "Message: " + str( history ) )
                 inputs = self.tokenizer(history, return_tensors="pt").to("cuda")
-                outputs = self.model_quantized.generate(**inputs,generation_config=self.get_config)
-                text = self.tokenizer.decode(outputs[0], skip_special_tokens=True).replace( str( history ), "")
+                with self.mutex:
+                    outputs = self.model.generate(**inputs,generation_config=self.get_config)
+                    text = self.tokenizer.decode(outputs[0], skip_special_tokens=True).replace( str( history ), "")
 
 
             # Logging input and generation if debugging is active
