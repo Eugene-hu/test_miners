@@ -100,7 +100,7 @@ class LlamaMiner( Miner ):
             {
                 "role": 'user',
                 "content":
-                + B_SYS
+                B_SYS
                 + history[0]["content"]
                 + E_SYS
                 + message[0]
